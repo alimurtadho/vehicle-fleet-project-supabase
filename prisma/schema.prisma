@@ -1,0 +1,236 @@
+// prisma/schema.prisma
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String   @id @default(uuid())
+  email         String   @unique
+  role          UserRole
+  employee_id   String   @unique
+  full_name     String
+  department    String
+  supervisor_id String?
+  location_id   String
+  created_at    DateTime @default(now())
+  updated_at    DateTime @updatedAt
+
+  supervisor User? @relation("UserSupervisor", fields: [supervisor_id], references: [id])
+  subordinates User[] @relation("UserSupervisor")
+  location   Location @relation(fields: [location_id], references: [id])
+  
+  // Relations
+  bookings_created Booking[] @relation("BookingCreator")
+  approvals        Approval[]
+  fuel_logs        FuelLog[]
+
+  @@map("users")
+}
+
+model Location {
+  id          String      @id @default(uuid())
+  name        String
+  type        LocationType
+  address     String
+  coordinates String?
+  created_at  DateTime    @default(now())
+
+  users    User[]
+  vehicles Vehicle[]
+  drivers  Driver[]
+
+  @@map("locations")
+}
+
+model Vehicle {
+  id           String        @id @default(uuid())
+  license_plate String       @unique
+  brand        String
+  model        String
+  year         Int
+  type         VehicleType
+  ownership    OwnershipType
+  location_id  String
+  status       VehicleStatus @default(AVAILABLE)
+  fuel_type    String
+  capacity     Int
+  daily_rate   Decimal?
+  image_url    String?
+  created_at   DateTime      @default(now())
+  updated_at   DateTime      @updatedAt
+
+  location Location @relation(fields: [location_id], references: [id])
+  
+  // Relations
+  bookings     Booking[]
+  fuel_logs    FuelLog[]
+  maintenance  MaintenanceSchedule[]
+
+  @@map("vehicles")
+}
+
+model Driver {
+  id           String   @id @default(uuid())
+  employee_id  String   @unique
+  full_name    String
+  license_number String
+  phone        String
+  location_id  String
+  status       DriverStatus @default(AVAILABLE)
+  created_at   DateTime @default(now())
+  updated_at   DateTime @updatedAt
+
+  location Location @relation(fields: [location_id], references: [id])
+  bookings Booking[]
+
+  @@map("drivers")
+}
+
+model Booking {
+  id             String        @id @default(uuid())
+  employee_id    String
+  vehicle_id     String
+  driver_id      String?
+  purpose        String
+  destination    String
+  start_datetime DateTime
+  end_datetime   DateTime
+  status         BookingStatus @default(PENDING)
+  notes          String?
+  created_by     String
+  created_at     DateTime      @default(now())
+  updated_at     DateTime      @updatedAt
+
+  // Relations
+  employee User    @relation("BookingCreator", fields: [created_by], references: [id])
+  vehicle  Vehicle @relation(fields: [vehicle_id], references: [id])
+  driver   Driver? @relation(fields: [driver_id], references: [id])
+  
+  approvals Approval[]
+  fuel_logs FuelLog[]
+
+  @@map("bookings")
+}
+
+model Approval {
+  id         String         @id @default(uuid())
+  booking_id String
+  approver_id String
+  level      Int
+  status     ApprovalStatus @default(PENDING)
+  comments   String?
+  approved_at DateTime?
+  created_at DateTime       @default(now())
+
+  booking  Booking @relation(fields: [booking_id], references: [id])
+  approver User    @relation(fields: [approver_id], references: [id])
+
+  @@unique([booking_id, level])
+  @@map("approvals")
+}
+
+model FuelLog {
+  id               String   @id @default(uuid())
+  vehicle_id       String
+  booking_id       String?
+  fuel_amount      Decimal
+  cost             Decimal
+  odometer_reading Int
+  notes            String?
+  logged_by        String
+  logged_at        DateTime @default(now())
+
+  vehicle Vehicle  @relation(fields: [vehicle_id], references: [id])
+  booking Booking? @relation(fields: [booking_id], references: [id])
+  user    User     @relation(fields: [logged_by], references: [id])
+
+  @@map("fuel_logs")
+}
+
+model MaintenanceSchedule {
+  id             String            @id @default(uuid())
+  vehicle_id     String
+  type           MaintenanceType
+  description    String
+  scheduled_date DateTime
+  completed_date DateTime?
+  cost           Decimal?
+  status         MaintenanceStatus @default(SCHEDULED)
+  notes          String?
+  created_at     DateTime          @default(now())
+
+  vehicle Vehicle @relation(fields: [vehicle_id], references: [id])
+
+  @@map("maintenance_schedules")
+}
+
+// Enums
+enum UserRole {
+  ADMIN
+  APPROVER
+  EMPLOYEE
+  MANAGEMENT
+}
+
+enum LocationType {
+  HEADQUARTERS
+  BRANCH
+  MINE_SITE
+}
+
+enum VehicleType {
+  PASSENGER
+  CARGO
+  HEAVY_EQUIPMENT
+}
+
+enum OwnershipType {
+  OWNED
+  RENTED
+}
+
+enum VehicleStatus {
+  AVAILABLE
+  IN_USE
+  MAINTENANCE
+  OUT_OF_SERVICE
+}
+
+enum DriverStatus {
+  AVAILABLE
+  ASSIGNED
+  OFF_DUTY
+}
+
+enum BookingStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum ApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum MaintenanceType {
+  SERVICE
+  REPAIR
+  INSPECTION
+}
+
+enum MaintenanceStatus {
+  SCHEDULED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
